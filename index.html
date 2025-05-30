@@ -1,0 +1,231 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Calculadora de Proporcionalidade de Salário</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      margin: 0;
+      color: #333;
+    }
+
+    .calculator {
+      background: white;
+      padding: 2rem;
+      border-radius: 15px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+      width: 100%;
+      max-width: 400px;
+      text-align: center;
+    }
+
+    h1 {
+      font-size: 1.8rem;
+      margin-bottom: 1.5rem;
+      color: #2c3e50;
+    }
+
+    .input-group {
+      margin-bottom: 1.2rem;
+      text-align: left;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 0.5rem;
+      font-weight: bold;
+      color: #34495e;
+    }
+
+    input {
+      width: 100%;
+      padding: 0.8rem;
+      border: 2px solid #ddd;
+      border-radius: 8px;
+      font-size: 1rem;
+      transition: border-color 0.3s;
+    }
+
+    input:focus {
+      outline: none;
+      border-color: #667eea;
+    }
+
+    .result {
+      margin-top: 1.5rem;
+      padding: 1rem;
+      background: #f8f9fa;
+      border-radius: 8px;
+      display: block;
+    }
+
+    .result p {
+      margin: 0.5rem 0;
+      font-size: 1.1rem;
+      color: #2c3e50;
+    }
+
+    .result p span {
+      font-weight: bold;
+      color: #667eea;
+    }
+
+    @media (max-width: 500px) {
+      .calculator {
+        margin: 1rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="calculator">
+    <h1>Calculadora de Proporcionalidade</h1>
+    <div class="input-group">
+      <label for="salary1">Salário 1 (João):</label>
+      <input type="text" id="salary1" placeholder="R$ 1.500,00" value="R$ 3312,56">
+    </div>
+    <div class="input-group">
+      <label for="salary2">Salário 2 (Carla):</label>
+      <input type="text" id="salary2" placeholder="R$ 3.000,00" value="R$ 1589,47">
+    </div>
+    <div class="input-group">
+      <label for="itemValue">Valor do Item:</label>
+      <input type="text" id="itemValue" placeholder="R$ 1.000,00" value="R$ 0,00">
+    </div>
+    <div class="result" id="result">
+      <p>Contribuição da Pessoa 1: <span id="contribution1">R$ 0,00</span></p>
+      <p>Contribuição da Pessoa 2: <span id="contribution2">R$ 0,00</span></p>
+      <p>Total: <span id="total">R$ 0,00</span></p>
+    </div>
+  </div>
+
+  <script>
+    // Função para formatar o valor como moeda brasileira
+    function formatCurrency(value) {
+      // Remove tudo que não é dígito
+      value = value.replace(/\D/g, '');
+      // Converte para número e divide por 100 (para centavos)
+      value = value ? (parseInt(value) / 100).toFixed(2) : '0.00';
+      // Adiciona separadores de milhar e vírgula
+      value = value.replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+      return `R$ ${value}`;
+    }
+
+    // Função para extrair o valor numérico do campo com R$
+    function parseCurrency(value) {
+      // Remove 'R$', espaços e substitui vírgula por ponto
+      const cleaned = value.replace('R$', '').replace(/\./g, '').replace(',', '.').trim();
+      return parseFloat(cleaned) || 0;
+    }
+
+    // Função para aplicar a máscara de moeda
+    function applyCurrencyMask(input) {
+      input.addEventListener('input', function(e) {
+        let value = e.target.value.replace(/\D/g, ''); // Remove não dígitos
+        if (value) {
+          e.target.value = formatCurrency(value);
+        } else {
+          e.target.value = 'R$ 0,00';
+        }
+        calculate(); // Chama o cálculo após cada mudança
+      });
+
+      // Manter o formato ao sair do campo
+      input.addEventListener('blur', function(e) {
+        if (!e.target.value || e.target.value === 'R$ 0,00') {
+          e.target.value = 'R$ 0,00';
+        }
+      });
+    }
+
+    // Aplicar máscara aos campos de entrada
+    const inputs = [document.getElementById('salary1'), document.getElementById('salary2'), document.getElementById('itemValue')];
+    inputs.forEach(input => applyCurrencyMask(input));
+
+    function calculate() {
+      const salary1 = parseCurrency(document.getElementById('salary1').value);
+      const salary2 = parseCurrency(document.getElementById('salary2').value);
+      const itemValue = parseCurrency(document.getElementById('itemValue').value);
+      const resultDiv = document.getElementById('result');
+      const contribution1Span = document.getElementById('contribution1');
+      const contribution2Span = document.getElementById('contribution2');
+      const totalSpan = document.getElementById('total');
+
+      let contribution1 = 0;
+      let contribution2 = 0;
+
+      // Se ambos os salários são zero, divisão meio a meio
+      if (salary1 === 0 && salary2 === 0 && itemValue > 0) {
+        contribution1 = itemValue / 2;
+        contribution2 = itemValue / 2;
+      } else if (itemValue > 0 && (salary1 > 0 || salary2 > 0)) {
+        // Calcular a soma dos salários
+        const totalSalary = salary1 + salary2;
+
+        // Calcular a proporção de cada pessoa
+        const proportion1 = salary1 / totalSalary;
+        const proportion2 = salary2 / totalSalary;
+
+        // Calcular as contribuições
+        contribution1 = itemValue * proportion1;
+        contribution2 = itemValue * proportion2;
+      }
+
+      // Exibir resultados
+      contribution1Span.textContent = `R$ ${contribution1.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.')}`;
+      contribution2Span.textContent = `R$ ${contribution2.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.')}`;
+      totalSpan.textContent = `R$ ${(contribution1 + contribution2).toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.')}`;
+      resultDiv.style.display = 'block';
+    }
+
+    // Chamar a função inicialmente para exibir valores zerados
+    calculate();
+  </script>
+</body>
+</html>
